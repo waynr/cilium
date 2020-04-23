@@ -416,6 +416,7 @@ var _ = Describe("K8sServicesTest", func() {
 		doRequestsFromThirdHostWithLocalPort :=
 			func(url string, count int, checkSourceIP bool, fromPort int) {
 				var cmd string
+
 				By("Making %d HTTP requests from outside cluster to %q", count, url)
 				for i := 1; i <= count; i++ {
 					if fromPort == 0 {
@@ -439,6 +440,7 @@ var _ = Describe("K8sServicesTest", func() {
 					}
 				}
 			}
+
 		doRequestsFromThirdHost := func(url string, count int, checkSourceIP bool) {
 			doRequestsFromThirdHostWithLocalPort(url, count, checkSourceIP, 0)
 		}
@@ -721,6 +723,107 @@ var _ = Describe("K8sServicesTest", func() {
 			kubectl.CiliumExecMustSucceed(context.TODO(), pod, "cilium bpf ct flush global", "Unable to flush CT maps")
 		}
 
+		testSessionAffinity := func() {
+			var (
+				data   v1.Service
+				dstPod string
+				count  = 10
+			)
+
+			err := kubectl.Get(helpers.DefaultNamespace, "service test-affinity").Unmarshal(&data)
+			Expect(err).Should(BeNil(), "Cannot retrieve service")
+			externalNodeName, _ := kubectl.GetNodeInfo(helpers.GetNodeWithoutCilium())
+			_, k8s1IP := kubectl.GetNodeInfo(helpers.K8s1)
+
+			httpURL := getHTTPLink(k8s1IP, data.Spec.Ports[0].NodePort)
+			cmd := helpers.CurlFail(httpURL) + " | grep 'Hostname:' " // pod name is in the hostname
+
+			// Send 10 requests to he test-affinity NodePort svc from outside (lb.h),
+			// and check that the same backend is chosen (checkDstPodIsSame=true)
+
+			By("Making %d HTTP requests from outside cluster to %q (sessionAffinity)", count, httpURL)
+
+			for i := 1; i <= count; i++ {
+				res, err := kubectl.ExecInHostNetNS(context.TODO(), externalNodeName, cmd)
+				Expect(err).Should(BeNil(), "Cannot exec in %s host netns", externalNodeName)
+				ExpectWithOffset(1, res).Should(helpers.CMDSuccess(),
+					"Cannot connect to service %q from outside cluster (%d/%d)", httpURL, i, count)
+				pod := strings.TrimSpace(strings.Split(res.GetStdOut(), ": ")[1])
+				if i == 1 {
+					// Retrieve the destination pod from the first request
+					dstPod = pod
+				} else {
+					// Check that destination pod is always the same
+					Expect(dstPod).To(Equal(pod))
+				}
+			}
+
+			// Delete the pod, and check that a new backend is chosen
+			kubectl.DeleteResource("pod", dstPod).ExpectSuccess("Unable to delete %s pod", dstPod)
+			kubectl.WaitPodDeleted(dstPod)
+			// Unfortunately, it takes a while until cilium-agent receives Endpoint
+			// update event which triggers a removal of the deleted dstPod from
+			// the affinity and the service BPF maps. Therefore, the bellow requests
+			// are flaky.
+			// TODO(brb) don't sleep, instead wait for Endpoint obj update (might be complicated though)
+			time.Sleep(7 * time.Second)
+
+			for i := 1; i <= count; i++ {
+				res, err := kubectl.ExecInHostNetNS(context.TODO(), externalNodeName, cmd)
+				Expect(err).Should(BeNil(), "Cannot exec in %s host netns", externalNodeName)
+				ExpectWithOffset(1, res).Should(helpers.CMDSuccess(),
+					"Cannot connect to service %q from outside cluster (%d/%d) after restart", httpURL, i, count)
+				pod := strings.TrimSpace(strings.Split(res.GetStdOut(), ": ")[1])
+				if i == 1 {
+					// Retrieve the destination pod from the first request
+					Expect(dstPod).ShouldNot(Equal(pod))
+					dstPod = pod
+				} else {
+					// Check that destination pod is always the same
+					Expect(dstPod).To(Equal(pod))
+				}
+			}
+
+			// Now check from inside the cluster (bpf_sock.c)
+			By("Making %d HTTP requests from %q to %q", count, testDSClient, httpURL)
+
+			pods, err := kubectl.GetPodNames(helpers.DefaultNamespace, testDSClient)
+			ExpectWithOffset(1, err).Should(BeNil(), "cannot retrieve pod names by filter %q", testDSClient)
+
+			for i := 1; i <= count; i++ {
+				res := kubectl.ExecPodCmd(helpers.DefaultNamespace, pods[1], cmd)
+				ExpectWithOffset(1, res).Should(helpers.CMDSuccess(),
+					"Pod %q can not connect to service %q (%d/%d)", pods[1], httpURL, i, count)
+				pod := strings.TrimSpace(strings.Split(res.GetStdOut(), ": ")[1])
+				if i == 1 {
+					// Retrieve the destination pod from the first request
+					dstPod = pod
+				} else {
+					// Check that destination pod is always the same
+					Expect(dstPod).To(Equal(pod))
+				}
+			}
+
+			// Again, delete the backend and check that new is chosen
+			kubectl.DeleteResource("pod", dstPod).ExpectSuccess("Unable to delete %s pod", dstPod)
+			kubectl.WaitPodDeleted(dstPod)
+			time.Sleep(7 * time.Second)
+
+			for i := 1; i <= count; i++ {
+				res := kubectl.ExecPodCmd(helpers.DefaultNamespace, pods[1], cmd)
+				ExpectWithOffset(1, res).Should(helpers.CMDSuccess(),
+					"Pod %q can not connect to service %q (%d/%d)", pods[1], httpURL, i, count)
+				pod := strings.TrimSpace(strings.Split(res.GetStdOut(), ": ")[1])
+				if i == 1 {
+					// Retrieve the destination pod from the first request
+					dstPod = pod
+				} else {
+					// Check that destination pod is always the same
+					Expect(dstPod).To(Equal(pod))
+				}
+			}
+		}
+
 		testExternalTrafficPolicyLocal := func() {
 			var (
 				data    v1.Service
@@ -932,6 +1035,10 @@ var _ = Describe("K8sServicesTest", func() {
 						testExternalTrafficPolicyLocal()
 					})
 
+					It("Tests NodePort with sessionAffinity", func() {
+						testSessionAffinity()
+					})
+
 					It("Tests HealthCheckNodePort", func() {
 						testHealthCheckNodePort()
 					})
@@ -955,6 +1062,10 @@ var _ = Describe("K8sServicesTest", func() {
 
 					It("Tests NodePort with externalTrafficPolicy=Local", func() {
 						testExternalTrafficPolicyLocal()
+					})
+
+					It("Tests NodePort with sessionAffinity", func() {
+						testSessionAffinity()
 					})
 
 					It("Tests HealthCheckNodePort", func() {

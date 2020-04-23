@@ -1,15 +1,17 @@
 # Code owners groups and a brief description of their areas:
-# @cilium-janitors      Catch-all for code not otherwise owned
+# @cilium/janitors      Catch-all for code not otherwise owned
 # @cilium/agent         Cilium Agent
 # @cilium/bpf           BPF Data Path
+# @cilium/build         Building and packaging
 # @cilium/ci            Continuous integration, testing
 # @cilium/cli           Commandline interfaces
-# @cilium/contributing  Developer documentation
+# @cilium/contributing  Developer documentation & tools
 # @cilium/docker        Docker plugin
 # @cilium/docs          Documentation, examples
 # @cilium/endpoint      Endpoint package
 # @cilium/health        Cilium cluster health tool
 # @cilium/hubble        Hubble integration
+# @cilium/ipam          IPAM
 # @cilium/kubernetes    K8s integration, K8s CNI plugin
 # @cilium/kvstore       Key/Value store: Consul, etcd
 # @cilium/loadbalancer  Load balancer
@@ -18,11 +20,6 @@
 # @cilium/policy        Policy behaviour
 # @cilium/proxy         L7 proxy, Envoy
 # @cilium/vendor        Vendoring, dependency management
-#
-# Specific code owners:
-# @eloycoto             Debian packaging
-# @aanm @ianvernon      Docker packaging
-# @scanf @borkmann      BPF documentation
 
 # The following filepaths should be sorted so that more specific paths occur
 # after the less specific paths, otherwise the ownership for the specific paths
@@ -30,14 +27,15 @@
 * @cilium/janitors
 api/ @cilium/api
 bpf/ @cilium/bpf
+Makefile @cilium/build
+Dockerfile @cilium/build
 bugtool/cmd/ @cilium/cli
 cilium/ @cilium/cli
 cilium/cmd/preflight_k8s_valid_cnp.go @cilium/kubernetes
 cilium-health/cmd/ @cilium/cli
 cilium-health/launch/ @cilium/health
-contrib/packaging/deb/ @eloycoto
-contrib/packaging/docker/ @aanm @ianvernon
-contrib/vagrant @cilium/ci
+contrib/packaging/ @cilium/build
+contrib/vagrant/ @cilium/contributing
 daemon/ @cilium/agent
 daemon/cmd/datapath.* @cilium/bpf
 daemon/cmd/endpoint.* @cilium/endpoint
@@ -52,7 +50,7 @@ daemon/cmd/proxy.go @cilium/proxy
 daemon/cmd/state.go @cilium/endpoint
 daemon/cmd/sysctl_linux.go @cilium/bpf
 Documentation/ @cilium/docs
-Documentation/bpf.rst @scanf @borkmann
+Documentation/bpf.rst @cilium/bpf
 Documentation/contributing/ @cilium/contributing
 envoy/ @cilium/proxy
 examples/ @cilium/docs
@@ -85,6 +83,7 @@ pkg/health/ @cilium/health
 pkg/hubble/ @cilium/hubble
 pkg/identity @cilium/policy
 pkg/ipcache/ @cilium/ipcache
+pkg/ipam/ @cilium/ipam
 pkg/k8s/ @cilium/kubernetes
 pkg/k8s/apis/cilium.io/v2/ @cilium/api
 pkg/k8s/client/clientset/versioned/ @cilium/api
@@ -115,6 +114,7 @@ pkg/proxy/accesslog @cilium/api
 pkg/serializer @cilium/agent
 pkg/service @cilium/policy
 pkg/sysctl @cilium/bpf
+pkg/testutils/ @cilium/ci
 pkg/tuple @cilium/bpf
 plugins/cilium-cni/ @cilium/kubernetes
 plugins/cilium-docker/ @cilium/docker
@@ -123,5 +123,7 @@ README.rst @cilium/docs
 test/ @cilium/ci
 tests/ @cilium/ci
 Vagrantfile @cilium/ci
+/Vagrantfile @cilium/contributing
+go.sum @cilium/vendor
+go.mod @cilium/vendor
 vendor/ @cilium/vendor
-Makefile @cilium/janitors

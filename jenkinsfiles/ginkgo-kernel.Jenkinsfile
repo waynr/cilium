@@ -8,6 +8,7 @@ pipeline {
     environment {
         PROJ_PATH = "src/github.com/cilium/cilium"
         VM_MEMORY = "8192"
+        VM_CPUS = "3"
         K8S_VERSION= """${sh(
             returnStdout: true,
             script: 'echo -n ${JobK8sVersion:-1.17}'
@@ -21,6 +22,15 @@ pipeline {
         NETNEXT="""${sh(
             returnStdout: true,
             script: 'if [ "$DEFAULT_KERNEL" = "net-next" ]; then echo -n "1"; fi'
+            )}"""
+        K8S_NODES="""${sh(
+            returnStdout: true,
+            script: 'if [ "$NETNEXT" = "1" ]; then echo -n "3"; else echo -n "2"; fi'
+            )}"""
+        NO_CILIUM_ON_NODE="k8s3"
+        KUBEPROXY="""${sh(
+            returnStdout: true,
+            script: 'if [ "$NETNEXT" = "1" ]; then echo -n "0"; else echo -n ""; fi'
             )}"""
     }
 

@@ -970,8 +970,12 @@ var _ = Describe("K8sPolicyTest", func() {
 		var demoYAML string
 
 		BeforeAll(func() {
-			By("Deploying demo daemonset")
 			demoYAML = helpers.ManifestGet(kubectl.BasePath(), "demo_ds.yaml")
+			By("Deleting old deployments")
+			_ = kubectl.Delete(demoYAML)
+			ExpectAllPodsTerminated(kubectl)
+
+			By("Deploying demo daemonset")
 			res := kubectl.ApplyDefault(demoYAML)
 			res.ExpectSuccess("Unable to apply %s", demoYAML)
 

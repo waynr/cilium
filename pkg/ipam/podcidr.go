@@ -462,7 +462,8 @@ func (n *NodesPodCIDRManager) allocateNode(node *v2.CiliumNode) (cn *v2.CiliumNo
 		}
 
 		log.WithFields(logrus.Fields{
-			"cidrs": cidrs.String(),
+			"cidrs":     cidrs.String(),
+			"allocated": allocated,
 		}).Debug("Allocated new CIDRs")
 	} else {
 		cidrs, err = parsePodCIDRs(node.Spec.IPAM.PodCIDRs)
@@ -492,7 +493,8 @@ func (n *NodesPodCIDRManager) allocateNode(node *v2.CiliumNode) (cn *v2.CiliumNo
 		}
 
 		log.WithFields(logrus.Fields{
-			"cidrs": cidrs.String(),
+			"cidrs":     cidrs.String(),
+			"allocated": allocated,
 		}).Debug("Allocated existing CIDRs")
 	}
 
@@ -620,6 +622,7 @@ func (n *NodesPodCIDRManager) allocateIPNets(nodeName string, v4CIDR, v6CIDR []*
 		}
 		revertStack.Push(revertFunc)
 		oldNodeCIDRs.v4PodCIDRs = v4CIDR
+		log.Debugf("Allocated v4CIDR %s", v4CIDR)
 		allocated = true
 	}
 
@@ -635,6 +638,7 @@ func (n *NodesPodCIDRManager) allocateIPNets(nodeName string, v4CIDR, v6CIDR []*
 		}
 		revertStack.Push(revertFunc)
 		oldNodeCIDRs.v6PodCIDRs = v6CIDR
+		log.Debugf("Allocated v6CIDR %s", v6CIDR)
 		allocated = true
 	}
 
@@ -745,11 +749,14 @@ func (n *NodesPodCIDRManager) allocateNext(nodeName string) (nCIDRs *nodeCIDRs, 
 	var v4CIDR, v6CIDR *net.IPNet
 
 	// Only allocate a v4 CIDR if the v4CIDR allocator is available
+	log.Debug("len(n.v4CIDRAllocators)", len(n.v4CIDRAllocators))
+	log.Debug("len(n.v6CIDRAllocators)", len(n.v6CIDRAllocators))
 	if len(n.v4CIDRAllocators) != 0 {
 		revertFunc, v4CIDR, err = allocateFirstFreeCIDR(n.v4CIDRAllocators)
 		if err != nil {
 			return
 		}
+		log.Debug("v4CIDR", v4CIDR)
 		revertStack.Push(revertFunc)
 	}
 	if len(n.v6CIDRAllocators) != 0 {
@@ -757,6 +764,7 @@ func (n *NodesPodCIDRManager) allocateNext(nodeName string) (nCIDRs *nodeCIDRs, 
 		if err != nil {
 			return
 		}
+		log.Debug("v6CIDR", v6CIDR)
 		revertStack.Push(revertFunc)
 	}
 
